@@ -16,28 +16,28 @@ button, a.btn, a.icon-btn {
 button:hover:not(:disabled), a.btn:hover, a.icon-btn:hover { border-color: var(--navy); }
 button:disabled { opacity: 0.4; cursor: default; }
 button:focus-visible, a:focus-visible, .dropzone:focus-within {
-  outline: 2px solid var(--orange);
+  outline: 2px solid var(--teal);
   outline-offset: 2px;
 }
 button.primary, a.btn.primary {
-  background: var(--orange);
-  border-color: var(--orange);
+  background: var(--gold);
+  border-color: var(--gold);
   color: var(--navy);
   font-weight: 600;
 }
 button.primary:hover:not(:disabled), a.btn.primary:hover { border-color: var(--navy); }
 .btn { padding: 9px 16px; }
 .icon-btn { justify-content: center; padding: 6px; }
-.icon-btn[aria-pressed='true'] { background: var(--orange-soft); border-color: var(--orange); }
+.icon-btn[aria-pressed='true'] { background: var(--gold-soft); border-color: var(--gold); }
 
 .muted { color: var(--muted); font-size: 13px; }
 .error { color: var(--danger); font-size: 13px; }
 .status { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: #fdecea; color: var(--danger); }
 
 .who { display: inline-flex; align-items: center; gap: 6px; color: var(--navy); font-weight: 700; text-decoration: none; }
-.who svg { color: var(--orange); }
+.who svg { color: var(--teal); }
 a.who { padding: 4px 8px 4px 4px; margin-left: -4px; border-radius: 6px; }
-a.who:hover { background: var(--orange-soft); }
+a.who:hover { background: var(--teal-soft); }
 
 /* ---------- Slide screens (viewer + presenting) ---------- */
 .layout {
@@ -86,7 +86,7 @@ a.who:hover { background: var(--orange-soft); }
   padding: 10px 16px;
   background: var(--bg);
   color: var(--text);
-  border-top: 3px solid var(--orange);
+  border-top: 3px solid var(--gold);
   box-shadow: 0 -2px 12px rgb(20 33 61 / 0.08);
 }
 .bar .current { color: var(--navy); }
@@ -98,7 +98,7 @@ a.who:hover { background: var(--orange-soft); }
 .nav button { font-size: 20px; line-height: 1; padding: 4px 14px; }
 
 /* ---------- Login ---------- */
-.login { min-height: 100svh; display: grid; place-items: center; padding: 16px; background: var(--surface); }
+.login { position: relative; min-height: 100svh; display: grid; place-items: center; padding: 16px; background: var(--surface); }
 .login-card {
   width: min(360px, 100%);
   display: grid;
@@ -107,11 +107,10 @@ a.who:hover { background: var(--orange-soft); }
   border-radius: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-top: 4px solid var(--orange);
+  border-top: 4px solid var(--gold);
   box-shadow: 0 8px 24px rgb(20 33 61 / 0.08);
 }
-.login-icon { justify-self: center; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--navy); color: var(--orange); }
-.login-icon svg { width: 30px; height: 30px; }
+.login-logo { justify-self: center; width: 240px; height: auto; margin-bottom: 4px; }
 .login-card h1 { margin: 0 0 8px; text-align: center; font-size: 20px; color: var(--navy); }
 .login-card label { font-size: 13px; color: var(--navy); font-weight: 600; }
 .login-card input {
@@ -122,10 +121,23 @@ a.who:hover { background: var(--orange-soft); }
   background: var(--bg);
   color: var(--text);
 }
-.login-card input:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; border-color: var(--navy); }
+.login-card input:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; border-color: var(--navy); }
 .login-card .error { margin: 0; }
 .login-card button.primary { justify-content: center; padding: 10px; margin-top: 6px; }
-.back { justify-self: center; font-size: 13px; color: var(--muted); }
+.back {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--control-border);
+  background: var(--bg);
+  color: var(--navy);
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.back:hover { border-color: var(--navy); }
 .password-field { position: relative; display: grid; }
 .password-field input { padding-right: 44px; }
 .eye-btn {
@@ -167,7 +179,7 @@ a.who:hover { background: var(--orange-soft); }
   text-decoration: none;
 }
 .topnav nav a:hover { background: var(--surface); color: var(--navy); }
-.topnav nav a[aria-current='page'] { color: var(--navy); font-weight: 600; box-shadow: inset 0 -3px 0 var(--orange); border-radius: 8px 8px 0 0; }
+.topnav nav a[aria-current='page'] { color: var(--navy); font-weight: 600; box-shadow: inset 0 -3px 0 var(--gold); border-radius: 8px 8px 0 0; }
 .topnav-user { display: flex; align-items: center; gap: 12px; }
 
 .page { max-width: 880px; margin: 0 auto; padding: 40px 24px; display: grid; gap: 20px; }
@@ -179,12 +191,12 @@ a.who:hover { background: var(--orange-soft); }
 .card { padding: 20px 24px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); }
 .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--navy); }
 .card p { margin: 0; }
-.card.success { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-left: 4px solid var(--orange); background: var(--orange-soft); }
+.card.success { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-left: 4px solid var(--teal); background: var(--teal-soft); }
 .file-name { color: var(--navy); overflow-wrap: anywhere; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .block { display: block; margin-top: 2px; }
 .toggle { cursor: pointer; }
-.toggle input { width: 20px; height: 20px; accent-color: var(--orange); flex: none; }
+.toggle input { width: 20px; height: 20px; accent-color: var(--teal); flex: none; }
 
 .dropzone {
   position: relative;
@@ -199,8 +211,8 @@ a.who:hover { background: var(--orange-soft); }
   color: var(--navy);
   cursor: pointer;
 }
-.dropzone svg { color: var(--orange); }
-.dropzone:hover, .dropzone.dragging { border-color: var(--orange); background: var(--orange-soft); }
+.dropzone svg { color: var(--teal); }
+.dropzone:hover, .dropzone.dragging { border-color: var(--teal); background: var(--teal-soft); }
 .dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 
 /* Current-file card: preview/delete icons appear on hover or keyboard focus */
@@ -215,7 +227,7 @@ a.who:hover { background: var(--orange-soft); }
   height: min(680px, 86svh);
   padding: 0;
   border: 0;
-  border-top: 4px solid var(--orange);
+  border-top: 4px solid var(--gold);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 16px 48px rgb(20 33 61 / 0.3);
@@ -244,7 +256,7 @@ a.who:hover { background: var(--orange-soft); }
   border-radius: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-top: 3px solid var(--orange);
+  border-top: 3px solid var(--gold);
   box-shadow: 0 4px 16px rgb(20 33 61 / 0.14);
 }
 .ink-panel .icon-btn { width: 36px; height: 36px; }
@@ -254,14 +266,14 @@ a.who:hover { background: var(--orange-soft); }
 .swatch[aria-checked='true'] { box-shadow: 0 0 0 2px var(--navy); }
 .size { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .size .dot { display: block; border-radius: 50%; flex: none; }
-.size input { writing-mode: vertical-lr; direction: rtl; width: 20px; height: 90px; accent-color: var(--orange); }
+.size input { writing-mode: vertical-lr; direction: rtl; width: 20px; height: 90px; accent-color: var(--teal); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .confirm {
   width: min(420px, 92vw);
   padding: 24px;
   border: 0;
-  border-top: 4px solid var(--orange);
+  border-top: 4px solid var(--gold);
   border-radius: 12px;
   box-shadow: 0 16px 48px rgb(20 33 61 / 0.3);
   color: var(--text);
@@ -310,7 +322,7 @@ button { touch-action: manipulation; } /* no double-tap zoom delay */
   .eye-btn { height: 44px; min-height: 0; }
   .login-card input { padding: 12px 14px; font-size: 16px; } /* 16px+ stops mobile browsers zooming in on focus */
 }
-.ink-panel .icon-btn.sharing { background: var(--orange); border-color: var(--orange); color: var(--navy); }
+.ink-panel .icon-btn.sharing { background: var(--gold); border-color: var(--gold); color: var(--navy); }
 
 /* ---------- Deck history (instructor home) ---------- */
 .section-title { margin: 8px 0 12px; font-size: 18px; color: var(--navy); }

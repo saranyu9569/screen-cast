@@ -1,10 +1,11 @@
 :root {
-  /* White-first theme; navy and orange are trim only. */
-  --navy: #14213d;
-  --navy-hover: #22325a;
-  --orange: #f77f00;
-  --orange-soft: #fff3e6;
-  --text: #1f2a44;
+  /* White-first theme in the VIEW logo's colours: navy text, gold for trim and main actions, teal for highlights. */
+  --navy: #022549;
+  --gold: #f2b01e;
+  --gold-soft: #fff6dc;
+  --teal: #00939a;
+  --teal-soft: #e2f4f4;
+  --text: #1c2b45;
   --muted: #5b6680;
   --bg: #fff;
   --surface: #f6f8fb;

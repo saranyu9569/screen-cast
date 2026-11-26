@@ -69,8 +69,9 @@ function Login({ onLogin }: { onLogin: (token: string, username: string) => void
 
   return (
     <main className="login">
+      <a href="#/" className="back">← กลับไปหน้าผู้ชม</a>
       <form className="login-card" onSubmit={submit}>
-        <span className="login-icon"><PersonIcon /></span>
+        <img className="login-logo" src="/logo.png" alt="VIEW — Visual Interface for Educational Workspace" width="240" height="84" />
         <h1>เข้าสู่ระบบผู้สอน</h1>
         <label htmlFor="username">ชื่อผู้ใช้</label>
         <input id="username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required
@@ -92,7 +93,6 @@ function Login({ onLogin }: { onLogin: (token: string, username: string) => void
         </div>
         {error && <p className="error" role="alert">{error}</p>}
         <button className="primary" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button>
-        <a href="#/" className="back">← กลับไปหน้าผู้ชม</a>
       </form>
     </main>
   )
