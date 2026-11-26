@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Uploaded slides
+uploads
+.env
+accounts.json
