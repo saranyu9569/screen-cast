@@ -4,6 +4,7 @@ import type { ServerWebSocket } from 'bun'
 import { mkdir, unlink } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
 import { ACCOUNTS_FILE, DATA_DIR, loadAccounts, saveAccount } from './accounts'
+import { type Deck, loadDecks, saveDecks } from './decks'
 import { eraseStrokes, type Ink, parseStroke, upsertStroke } from './ink'
 
 const PORT = Number(process.env.PORT ?? 3001)
@@ -38,6 +39,10 @@ type Role = 'instructor' | 'viewer'
 type State = { pdfUrl: string | null; pdfName: string | null; page: number; ink: Ink; screen: { codec: string } | null }
 const state: State = { pdfUrl: null, pdfName: null, page: 1, ink: {}, screen: null }
 let sharer: ServerWebSocket<{ role: Role }> | null = null
+// Drawings of decks that aren't showing right now, so switching decks doesn't lose them (memory only).
+const inkByDeck = new Map<string, Ink>()
+const currentDeckId = () => state.pdfUrl?.split('/').pop() ?? null
+const DECK_ID = /^[0-9a-f-]{36}$/
 const MAX_CHUNK_BYTES = 2 * 1024 * 1024
 // Every socket message is { type, ... }: 'state' carries the whole state, the others are ink edits.
 const broadcast = (msg: object): void => { server.publish('room', JSON.stringify(msg)) }
@@ -79,11 +84,31 @@ const server = Bun.serve<{ role: Role }>({
 
     if (url.pathname === '/api/pdf' && req.method === 'DELETE') {
       if (!tokenOk(bearer(req))) return unauthorized()
-      const id = state.pdfUrl?.split('/').pop()
-      if (id) await unlink(`${UPLOAD_DIR}${id}.pdf`).catch(() => {})
-      Object.assign(state, { pdfUrl: null, pdfName: null, page: 1, ink: {} })
-      publishState()
+      const id = currentDeckId()
+      if (id) await deleteDeck(id)
       return new Response(null, { status: 204 })
+    }
+
+    if (url.pathname === '/api/decks' && req.method === 'GET') {
+      if (!tokenOk(bearer(req))) return unauthorized()
+      return Response.json(await loadDecks())
+    }
+
+    const deckAction = url.pathname.match(/^\/api\/decks\/([0-9a-f-]{36})(\/open)?$/)
+    if (deckAction) {
+      if (!tokenOk(bearer(req))) return unauthorized()
+      const [, id, open] = deckAction
+      const deck = (await loadDecks()).find((d) => d.id === id)
+      if (!deck) return new Response('ไม่พบไฟล์นี้', { status: 404 })
+      if (open && req.method === 'POST') {
+        if (id !== currentDeckId()) showDeck(deck)
+        return new Response(null, { status: 204 })
+      }
+      if (!open && req.method === 'DELETE') {
+        await deleteDeck(id)
+        return new Response(null, { status: 204 })
+      }
+      return new Response('Method not allowed', { status: 405 })
     }
 
     if (url.pathname === '/api/upload' && req.method === 'POST') {
@@ -95,13 +120,10 @@ const server = Bun.serve<{ role: Role }>({
       const bytes = new Uint8Array(await file.arrayBuffer())
       if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') return new Response('ไฟล์นี้ไม่ใช่ PDF', { status: 415 })
 
-      const id = crypto.randomUUID()
-      await Bun.write(`${UPLOAD_DIR}${id}.pdf`, bytes)
-      state.pdfUrl = `/api/pdf/${id}`
-      state.pdfName = file.name.slice(0, 200)
-      state.page = 1
-      state.ink = {}
-      publishState()
+      const deck: Deck = { id: crypto.randomUUID(), name: file.name.slice(0, 200), uploadedAt: new Date().toISOString() }
+      await Bun.write(`${UPLOAD_DIR}${deck.id}.pdf`, bytes)
+      await saveDecks([deck, ...(await loadDecks())])
+      showDeck(deck)
       return new Response(null, { status: 204 })
     }
 
@@ -177,6 +199,27 @@ const server = Bun.serve<{ role: Role }>({
     },
   },
 })
+
+function showDeck(deck: Deck) {
+  const current = currentDeckId()
+  if (current) inkByDeck.set(current, state.ink)
+  state.pdfUrl = `/api/pdf/${deck.id}`
+  state.pdfName = deck.name
+  state.page = 1
+  state.ink = inkByDeck.get(deck.id) ?? {}
+  publishState()
+}
+
+async function deleteDeck(id: string) {
+  if (!DECK_ID.test(id)) return
+  await unlink(`${UPLOAD_DIR}${id}.pdf`).catch(() => {})
+  await saveDecks((await loadDecks()).filter((d) => d.id !== id))
+  inkByDeck.delete(id)
+  if (id === currentDeckId()) {
+    Object.assign(state, { pdfUrl: null, pdfName: null, page: 1, ink: {} })
+    publishState()
+  }
+}
 
 function stopScreen() {
   sharer = null

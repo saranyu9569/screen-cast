@@ -228,7 +228,7 @@ a.who:hover { background: var(--orange-soft); }
 /* ---------- Ink (drawing on slides) ---------- */
 .slide-wrap { position: relative; line-height: 0; }
 .ink-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.ink-layer.editing { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.ink-layer.editing { pointer-events: auto; touch-action: pinch-zoom; cursor: crosshair; } /* one finger writes, two fingers zoom */
 .ink-layer.eraser { cursor: cell; }
 
 .ink-panel {
@@ -289,3 +289,60 @@ a.who:hover { background: var(--orange-soft); }
 .screen-waiting { position: absolute; margin: 0; color: #c5cde0; }
 .nav[hidden] { display: none; }
 .share-only { justify-self: start; }
+
+/* ---------- Touch screens (tablets) ---------- */
+button { touch-action: manipulation; } /* no double-tap zoom delay */
+.slide-box { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ink-panel { max-height: calc(100svh - 100px); overflow-y: auto; }
+@media (hover: none) {
+  .lock-btn { display: none; } /* the bar always shows on touch screens, so locking does nothing */
+}
+@media (pointer: coarse) {
+  button, a.btn, a.icon-btn { min-height: 44px; }
+  .icon-btn { min-width: 44px; justify-content: center; }
+  .ink-panel { gap: 8px; padding: 10px; }
+  .ink-panel .icon-btn { width: 48px; height: 48px; }
+  .swatches { grid-template-columns: repeat(2, 34px); gap: 10px; }
+  .swatch { width: 34px; height: 34px; min-height: 0; }
+  .size input { width: 34px; height: 130px; }
+  .nav button { min-width: 52px; }
+  .topnav nav a { padding: 12px 16px; }
+  .eye-btn { height: 44px; min-height: 0; }
+  .login-card input { padding: 12px 14px; font-size: 16px; } /* 16px+ stops mobile browsers zooming in on focus */
+}
+.ink-panel .icon-btn.sharing { background: var(--orange); border-color: var(--orange); color: var(--navy); }
+
+/* ---------- Deck history (instructor home) ---------- */
+.section-title { margin: 8px 0 12px; font-size: 18px; color: var(--navy); }
+.deck-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.deck { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.deck.active { border: 2px solid #22a45d; box-shadow: 0 0 0 3px rgb(34 164 93 / 0.18); }
+.deck-thumb { position: relative; aspect-ratio: 16 / 10; }
+.deck-thumb .slide-box { height: 100%; padding: 8px; }
+.deck-thumb .slide-box canvas { box-shadow: 0 1px 6px rgb(20 33 61 / 0.15); }
+.deck-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(20 33 61 / 0.45);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.deck:hover .deck-overlay, .deck-overlay:focus-within { opacity: 1; }
+@media (hover: none) {
+  .deck-overlay { opacity: 1; background: none; place-items: end; padding: 8px; }
+}
+.deck-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  background: #22a45d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.deck-info { display: grid; gap: 2px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.deck-info .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

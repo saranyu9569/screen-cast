@@ -18,7 +18,7 @@ type Props = {
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke, w: number, h: number) {
-  const pts = s.points.map(([x, y]) => [x * w, y * h] as const)
+  const pts = s.points.map(([x, y, p]) => [x * w, y * h, p] as const)
   ctx.save()
   ctx.strokeStyle = s.color
   ctx.fillStyle = s.color
@@ -26,10 +26,25 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke, w: number, h: numb
   ctx.lineJoin = 'round'
   ctx.lineWidth = (s.size * w) / 1000
   ctx.globalAlpha = s.tool === 'pencil' ? 0.65 : 1
+  const base = ctx.lineWidth
+  // S Pen pressure (pen tool only): each segment gets its own width. Pencil stays even so its
+  // see-through overlaps don't show as dots.
+  const width = (p: number | undefined) => (p === undefined ? base : base * (0.35 + 1.3 * p))
   if (pts.length === 1) {
     ctx.beginPath()
-    ctx.arc(pts[0][0], pts[0][1], ctx.lineWidth / 2, 0, Math.PI * 2)
+    ctx.arc(pts[0][0], pts[0][1], width(pts[0][2]) / 2, 0, Math.PI * 2)
     ctx.fill()
+  } else if (s.tool === 'pen' && pts[0][2] !== undefined) {
+    const mid = (a: readonly (number | undefined)[], b: readonly (number | undefined)[]) => [(a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2]
+    for (let i = 1; i < pts.length; i++) {
+      const from = i === 1 ? pts[0] : mid(pts[i - 1], pts[i])
+      const to = i === pts.length - 1 ? pts[i] : mid(pts[i], pts[i + 1])
+      ctx.beginPath()
+      ctx.lineWidth = width(pts[i][2])
+      ctx.moveTo(from[0], from[1])
+      ctx.quadraticCurveTo(pts[i][0], pts[i][1], to[0], to[1])
+      ctx.stroke()
+    }
   } else {
     // Quadratic curves through segment midpoints smooth out the pointer jitter.
     ctx.beginPath()
@@ -58,6 +73,9 @@ export function InkLayer({ strokes, tool = null, color = '#e53935', sizePx = 4, 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const current = useRef<Stroke | null>(null)
+  const drawingWith = useRef<{ id: number; type: string } | null>(null)
+  // Palm rejection: once a stylus has touched the slide, fingers and palms no longer draw or erase.
+  const penSeen = useRef(false)
   const frame = useRef(0)
 
   useEffect(() => {
@@ -81,6 +99,22 @@ export function InkLayer({ strokes, tool = null, color = '#e53935', sizePx = 4, 
   const point = (e: React.PointerEvent | PointerEvent): [number, number] => {
     const r = canvasRef.current!.getBoundingClientRect()
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]
+  }
+  const inkPoint = (e: PointerEvent): Stroke['points'][number] => {
+    const [x, y] = point(e)
+    return e.pointerType === 'pen' && e.pressure > 0 ? [x, y, Math.round(e.pressure * 100) / 100] : [x, y]
+  }
+  const ignored = (e: React.PointerEvent) => e.pointerType === 'touch' && penSeen.current
+
+  // A second finger means a pinch-zoom, not writing: drop the half-drawn stroke from the first finger.
+  const abandonTouchStroke = () => {
+    if (current.current && drawingWith.current?.type === 'touch') {
+      cancelAnimationFrame(frame.current)
+      frame.current = 0
+      onErase?.([current.current.id])
+      current.current = null
+      drawingWith.current = null
+    }
   }
 
   const eraseAt = (e: React.PointerEvent) => {
@@ -116,31 +150,38 @@ export function InkLayer({ strokes, tool = null, color = '#e53935', sizePx = 4, 
   }
 
   const down = (e: React.PointerEvent) => {
-    if (!tool || tool === 'laser' || e.button !== 0) return
+    if (e.pointerType === 'pen') penSeen.current = true
+    if (!tool || tool === 'laser' || e.button !== 0 || ignored(e)) return
+    if (drawingWith.current) return abandonTouchStroke() // another pointer is already drawing
     e.currentTarget.setPointerCapture(e.pointerId)
+    drawingWith.current = { id: e.pointerId, type: e.pointerType }
     if (tool === 'eraser') return eraseAt(e)
     const size = Math.min(60, Math.max(1, (sizePx * 1000) / Math.max(1, canvasRef.current!.clientWidth)))
-    current.current = { id: crypto.randomUUID(), tool, color, size, points: [point(e)] }
+    current.current = { id: crypto.randomUUID(), tool, color, size, points: [inkPoint(e.nativeEvent)] }
     scheduleFlush()
   }
 
   const move = (e: React.PointerEvent) => {
-    if (tool === 'laser') return sendLaser(point(e))
-    if (!tool || !e.currentTarget.hasPointerCapture(e.pointerId)) return
+    if (tool === 'laser') return ignored(e) || sendLaser(point(e))
+    if (!tool || e.pointerId !== drawingWith.current?.id) return
     if (tool === 'eraser') return eraseAt(e)
     if (!current.current) return
     const events = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent]
-    for (const ev of events.length ? events : [e.nativeEvent]) current.current.points.push(point(ev))
-    if (current.current.points.length > 4900) up() // stay under the server's per-stroke limit
+    for (const ev of events.length ? events : [e.nativeEvent]) current.current.points.push(inkPoint(ev))
+    if (current.current.points.length > 4900) up(e) // stay under the server's per-stroke limit
     else scheduleFlush()
   }
 
-  const up = () => {
+  const up = (e?: React.PointerEvent) => {
+    if (e && e.pointerId !== drawingWith.current?.id) return
+    drawingWith.current = null
     if (!current.current) return
     cancelAnimationFrame(frame.current)
     flush()
     current.current = null
   }
+  // The browser cancels a touch when it takes over for pinch-zoom.
+  const cancel = (e: React.PointerEvent) => (e.pointerType === 'touch' ? abandonTouchStroke() : up(e))
 
   const dot = tool === 'laser' ? ownLaser : laserAt
   return (
@@ -152,7 +193,7 @@ export function InkLayer({ strokes, tool = null, color = '#e53935', sizePx = 4, 
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
-        onPointerCancel={up}
+        onPointerCancel={cancel}
         onPointerLeave={() => tool === 'laser' && sendLaser(null)}
       />
       {dot && <span className="laser-dot" style={{ left: `${dot[0] * 100}%`, top: `${dot[1] * 100}%` }} aria-hidden="true" />}

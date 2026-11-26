@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 
 // Points are normalized to 0..1 of the slide; size is in px per 1000px of slide width.
-export type Stroke = { id: string; tool: 'pen' | 'pencil'; color: string; size: number; points: [number, number][] }
+// A point may carry stylus pressure (0..1) as a third value.
+export type Stroke = {
+  id: string
+  tool: 'pen' | 'pencil'
+  color: string
+  size: number
+  points: ([number, number] | [number, number, number])[]
+}
 export type Ink = Record<number, Stroke[]>
 export type SlideState = {
   pdfUrl: string | null

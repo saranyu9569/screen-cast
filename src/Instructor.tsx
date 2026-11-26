@@ -127,12 +127,26 @@ function InstructorApp({ token, username, onLogout }: AppProps) {
     return res?.ok ? null : 'ลบไฟล์ไม่สำเร็จ'
   }
 
+  const auth = { Authorization: `Bearer ${token}` }
+  const decks = {
+    list: async (): Promise<Deck[]> => {
+      const res = await fetch('/api/decks', { headers: auth }).catch(() => null)
+      if (res?.status === 401) onLogout()
+      return res?.ok ? res.json() : []
+    },
+    open: async (id: string) => {
+      const res = await fetch(`/api/decks/${id}/open`, { method: 'POST', headers: auth }).catch(() => null)
+      if (res?.status === 401) onLogout()
+      return !!res?.ok
+    },
+  }
+
   if (route === ROUTES.present) return <Present state={state} connected={connected} goto={goto} ink={ink} screen={screen} />
 
   const page =
     route === ROUTES.teach ? <TeachPage state={state} upload={upload} remove={remove} /> :
     route === ROUTES.settings ? <SettingsPage username={username} onLogout={logout} /> :
-    <HomePage state={state} username={username} />
+    <HomePage state={state} username={username} decks={decks} />
 
   return (
     <div className="shell">
@@ -170,7 +184,11 @@ function TopNav({ route, username, onLogout }: { route: string; username: string
   )
 }
 
-function HomePage({ state, username }: { state: SlideState; username: string }) {
+type Deck = { id: string; name: string; uploadedAt: string }
+type DeckApi = { list: () => Promise<Deck[]>; open: (id: string) => Promise<boolean> }
+const noop = () => {}
+
+function HomePage({ state, username, decks }: { state: SlideState; username: string; decks: DeckApi }) {
   return (
     <>
       <section className="hero">
@@ -181,13 +199,54 @@ function HomePage({ state, username }: { state: SlideState; username: string }) 
           <CopyViewerLink />
         </div>
       </section>
-      <section className="card">
-        <h2>สไลด์ปัจจุบัน</h2>
-        {state.pdfUrl
-          ? <p><strong className="file-name">{state.pdfName ?? 'ไฟล์ PDF'}</strong> · กำลังแสดงสไลด์ที่ {state.page}</p>
-          : <p className="muted">ยังไม่มีไฟล์ — อัปโหลด PDF เพื่อเริ่มนำเสนอ</p>}
-      </section>
+      <DeckHistory state={state} decks={decks} />
     </>
+  )
+}
+
+function DeckHistory({ state, decks }: { state: SlideState; decks: DeckApi }) {
+  const [list, setList] = useState<Deck[] | null>(null)
+  const [opening, setOpening] = useState('')
+
+  // Reload whenever the showing deck changes (a new upload lands at the top).
+  useEffect(() => { decks.list().then(setList) }, [decks, state.pdfUrl])
+
+  const use = async (deck: Deck) => {
+    setOpening(deck.id)
+    if (await decks.open(deck.id)) location.assign(ROUTES.present)
+    setOpening('')
+  }
+
+  if (!list) return null
+  if (!list.length) return <section className="card"><h2>ประวัติสไลด์</h2><p className="muted">ยังไม่มีไฟล์ — อัปโหลด PDF เพื่อเริ่มนำเสนอ</p></section>
+
+  return (
+    <section>
+      <h2 className="section-title">ประวัติสไลด์</h2>
+      <ul className="deck-grid">
+        {list.map((deck) => {
+          const active = state.pdfUrl === `/api/pdf/${deck.id}`
+          return (
+            <li key={deck.id} className={active ? 'deck active' : 'deck'}>
+              <div className="deck-thumb">
+                <PdfSlide url={`/api/pdf/${deck.id}`} page={1} onLoad={noop} />
+                <div className="deck-overlay">
+                  <button className="primary" onClick={() => use(deck)} disabled={!!opening}
+                    aria-label={`${active ? 'นำเสนอต่อ' : 'ใช้สไลด์นี้'}: ${deck.name}`}>
+                    <Icon d={icons.cast} />{opening === deck.id ? 'กำลังเปิด…' : active ? 'นำเสนอต่อ' : 'ใช้สไลด์นี้'}
+                  </button>
+                </div>
+                {active && <span className="deck-badge">กำลังใช้งาน · สไลด์ {state.page}</span>}
+              </div>
+              <div className="deck-info">
+                <strong className="file-name">{deck.name}</strong>
+                <span className="muted">{new Date(deck.uploadedAt).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 
@@ -417,45 +476,52 @@ function Present({ state, connected, goto, ink, screen }: PresentProps) {
         )
         : <p className="empty">ยังไม่มีไฟล์ — <a href={ROUTES.teach}>เลือกไฟล์ PDF</a> หรือกด “แชร์จอ” ด้านล่าง</p>}
       {!pinned && <div className="reveal-zone" aria-hidden="true" />}
-      {state.pdfUrl && !shareStream && (
-        <aside className="ink-panel" role="toolbar" aria-orientation="vertical" aria-label="เครื่องมือเขียน">
-          {INK_TOOLS.map((t) => (
-            <button key={t.label} className="icon-btn" aria-pressed={tool === t.tool} onClick={() => {
-                if (tool === 'laser' && t.tool !== 'laser') ink.laser(state.page, null)
-                setTool(t.tool)
-              }}
-              aria-label={t.label} title={t.label}>
-              <Icon d={t.icon} />
-            </button>
-          ))}
-          {(tool === 'pen' || tool === 'pencil') && (
-            <>
-              <span className="divider" aria-hidden="true" />
-              <div className="swatches" role="radiogroup" aria-label="สีหมึก">
-                {INK_COLORS.map((c) => (
-                  <button key={c.value} className="swatch" role="radio" aria-checked={color === c.value}
-                    aria-label={c.name} title={c.name} style={{ background: c.value }} onClick={() => setColor(c.value)} />
-                ))}
-              </div>
-              <span className="divider" aria-hidden="true" />
-              <label className="size" title={`ขนาดเส้น ${sizePx}`}>
-                <span className="dot" style={{ width: sizePx + 4, height: sizePx + 4, background: color }} aria-hidden="true" />
-                <span className="sr-only">ขนาดเส้น</span>
-                <input type="range" min="1" max="20" value={sizePx} onChange={(e) => setSizePx(Number(e.target.value))} />
-              </label>
-            </>
-          )}
-          {strokes.length > 0 && (
-            <>
-              <span className="divider" aria-hidden="true" />
-              <button className="icon-btn danger" onClick={() => ink.clearPage(state.page)}
-                aria-label="ลบการเขียนทั้งหน้านี้" title="ลบการเขียนทั้งหน้านี้">
-                <Icon d={icons.trash} />
+      <aside className="ink-panel" role="toolbar" aria-orientation="vertical" aria-label="เครื่องมือ">
+        <button className={shareStream ? 'icon-btn sharing' : 'icon-btn'} onClick={toggleShare} aria-pressed={!!shareStream}
+          aria-label={shareStream ? 'หยุดแชร์จอ' : 'แชร์จอ'} title={shareStream ? 'หยุดแชร์จอ' : 'แชร์จอ'}>
+          <Icon d={icons.cast} />
+        </button>
+        {state.pdfUrl && !shareStream && (
+          <>
+            <span className="divider" aria-hidden="true" />
+            {INK_TOOLS.map((t) => (
+              <button key={t.label} className="icon-btn" aria-pressed={tool === t.tool} onClick={() => {
+                  if (tool === 'laser' && t.tool !== 'laser') ink.laser(state.page, null)
+                  setTool(t.tool)
+                }}
+                aria-label={t.label} title={t.label}>
+                <Icon d={t.icon} />
               </button>
-            </>
-          )}
-        </aside>
-      )}
+            ))}
+            {(tool === 'pen' || tool === 'pencil') && (
+              <>
+                <span className="divider" aria-hidden="true" />
+                <div className="swatches" role="radiogroup" aria-label="สีหมึก">
+                  {INK_COLORS.map((c) => (
+                    <button key={c.value} className="swatch" role="radio" aria-checked={color === c.value}
+                      aria-label={c.name} title={c.name} style={{ background: c.value }} onClick={() => setColor(c.value)} />
+                  ))}
+                </div>
+                <span className="divider" aria-hidden="true" />
+                <label className="size" title={`ขนาดเส้น ${sizePx}`}>
+                  <span className="dot" style={{ width: sizePx + 4, height: sizePx + 4, background: color }} aria-hidden="true" />
+                  <span className="sr-only">ขนาดเส้น</span>
+                  <input type="range" min="1" max="20" value={sizePx} onChange={(e) => setSizePx(Number(e.target.value))} />
+                </label>
+              </>
+            )}
+            {strokes.length > 0 && (
+              <>
+                <span className="divider" aria-hidden="true" />
+                <button className="icon-btn danger" onClick={() => ink.clearPage(state.page)}
+                  aria-label="ลบการเขียนทั้งหน้านี้" title="ลบการเขียนทั้งหน้านี้">
+                  <Icon d={icons.trash} />
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </aside>
       <footer className={pinned ? 'bar pinned' : 'bar'}>
         <div className="side">
           <button className="icon-btn" onClick={exit} aria-label="กลับหน้าหลัก" title="กลับหน้าหลัก">

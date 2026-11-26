@@ -30,7 +30,7 @@ export function SlideNav({ page, numPages, go }: { page: number; numPages: numbe
 export function LockButton({ pinned, onToggle }: { pinned: boolean; onToggle: () => void }) {
   const label = pinned ? 'ปลดล็อกแถบ (ซ่อนอัตโนมัติ)' : 'ล็อกแถบให้แสดงค้างไว้'
   return (
-    <button className="icon-btn" onClick={onToggle} aria-pressed={pinned} aria-label={label} title={label}>
+    <button className="icon-btn lock-btn" onClick={onToggle} aria-pressed={pinned} aria-label={label} title={label}>
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...stroke}>
         <rect x="5" y="11" width="14" height="10" rx="2" />
         <path d={pinned ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2'} />
