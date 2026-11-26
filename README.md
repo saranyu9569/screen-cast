@@ -1,78 +1,38 @@
-# React + TypeScript + Vite
+# Screen Cast
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Share PDF slides live: the instructor presents and draws, viewers follow along in their browser.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+bun install
+bun run add-account Instructor1   # first time only; prompts for a password
+bun run server                    # API + WebSocket on :3001
+bun run dev                       # app on :5173
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Viewer page: `/` · Instructor page: `/#/instructor`
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Deploy to Railway
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The Bun server serves the built app, the API and the WebSocket from one process.
+`railway.json` already sets the build (`bun run build`) and start (`bun run start`) commands.
 
-```
+1. **New project** → *Deploy from GitHub repo* → pick this repository.
+2. **Add a volume** to the service (right-click the service → *Attach volume*), mount path `/data`.
+   Uploaded slides and instructor accounts live here, so they survive redeploys.
+3. **Variables** tab, add:
+
+   | Variable | Value |
+   |---|---|
+   | `DATA_DIR` | `/data` |
+   | `INSTRUCTOR_USERNAME` | first instructor's username |
+   | `INSTRUCTOR_PASSWORD` | their password (8+ characters) |
+
+   The account is created on the first start, only while no accounts exist.
+   After that you can delete `INSTRUCTOR_PASSWORD`; the stored password is hashed.
+4. **Settings → Networking → Generate Domain** to get the public URL.
+
+Add more instructors later from the service's shell (`railway ssh`): `bun run add-account <username>`.
+
+Limits: one shared room; the current slide, drawings and logins reset when the server restarts (uploaded files and accounts on the volume stay).

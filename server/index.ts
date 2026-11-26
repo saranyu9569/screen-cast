@@ -1,15 +1,25 @@
 // Realtime slide server: one shared session, state in memory.
 // shortcut: single room, login sessions and slide state lost on restart — add rooms/persistence before real use.
 import { mkdir, unlink } from 'node:fs/promises'
-import { ACCOUNTS_FILE, loadAccounts } from './accounts'
+import { join, normalize } from 'node:path'
+import { ACCOUNTS_FILE, DATA_DIR, loadAccounts, saveAccount } from './accounts'
 import { eraseStrokes, type Ink, parseStroke, upsertStroke } from './ink'
 
 const PORT = Number(process.env.PORT ?? 3001)
 const MAX_BYTES = 50 * 1024 * 1024
-const UPLOAD_DIR = new URL('../uploads/', import.meta.url).pathname
+const UPLOAD_DIR = join(DATA_DIR, 'uploads') + '/'
 await mkdir(UPLOAD_DIR, { recursive: true })
+// Built frontend (`bun run build`). In dev, Vite serves it instead and this folder may not exist.
+const DIST_DIR = new URL('../dist/', import.meta.url).pathname
 
-if (!Object.keys(await loadAccounts()).length) console.log(`No instructor accounts in ${ACCOUNTS_FILE}. Add one: bun run add-account <username>`)
+// First deploy: create the first instructor from env vars, since there is no terminal to run add-account.
+if (!Object.keys(await loadAccounts()).length) {
+  const { INSTRUCTOR_USERNAME: user, INSTRUCTOR_PASSWORD: pass } = process.env
+  if (user && pass && pass.length >= 8) {
+    await saveAccount(user.trim(), pass)
+    console.log(`Created instructor account "${user.trim()}" from environment variables.`)
+  } else console.log(`No instructor accounts in ${ACCOUNTS_FILE}. Add one: bun run add-account <username>`)
+}
 const sessions = new Map<string, string>() // token -> username
 // Verified when the username is unknown, so response time doesn't reveal which usernames exist.
 const DUMMY_HASH = await Bun.password.hash(crypto.randomUUID())
@@ -99,7 +109,8 @@ const server = Bun.serve<{ role: Role }>({
         : new Response('Not found', { status: 404 })
     }
 
-    return new Response('Not found', { status: 404 })
+    if (url.pathname.startsWith('/api/')) return new Response('Not found', { status: 404 })
+    return serveFrontend(url.pathname)
   },
   websocket: {
     open(ws) {
@@ -140,5 +151,17 @@ const server = Bun.serve<{ role: Role }>({
     },
   },
 })
+
+async function serveFrontend(pathname: string) {
+  let path = ''
+  try { path = normalize(join(DIST_DIR, decodeURIComponent(pathname))) } catch { /* bad %-encoding: fall back to the app shell */ }
+  if (path.startsWith(DIST_DIR)) {
+    const file = Bun.file(path)
+    if (path !== DIST_DIR && (await file.exists())) return new Response(file)
+  }
+  // The app routes with #hash, so any other path just gets the app shell.
+  const index = Bun.file(join(DIST_DIR, 'index.html'))
+  return (await index.exists()) ? new Response(index) : new Response('Not found', { status: 404 })
+}
 
 console.log(`screen-cast server on http://localhost:${server.port}`)
