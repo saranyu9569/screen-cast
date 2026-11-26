@@ -3,7 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 // Points are normalized to 0..1 of the slide; size is in px per 1000px of slide width.
 export type Stroke = { id: string; tool: 'pen' | 'pencil'; color: string; size: number; points: [number, number][] }
 export type Ink = Record<number, Stroke[]>
-export type SlideState = { pdfUrl: string | null; pdfName: string | null; page: number; ink: Ink }
+export type SlideState = {
+  pdfUrl: string | null
+  pdfName: string | null
+  page: number
+  ink: Ink
+  // Set while the instructor shares their screen.
+  screen: { codec: string } | null
+}
 
 type Message =
   | ({ type: 'state' } & SlideState)
@@ -33,10 +40,12 @@ function applyInk(ink: Ink, msg: Message): Ink {
 
 // Pass the instructor's login token to control slides; null joins as a viewer.
 export function useSlideSync(token: string | null) {
-  const [state, setState] = useState<SlideState>({ pdfUrl: null, pdfName: null, page: 1, ink: {} })
+  const [state, setState] = useState<SlideState>({ pdfUrl: null, pdfName: null, page: 1, ink: {}, screen: null })
   const [connected, setConnected] = useState(false)
   const [laser, setLaser] = useState<{ page: number; at: [number, number] } | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  // Receives binary screen-video chunks; set by the component that decodes them.
+  const onScreenChunk = useRef<((chunk: ArrayBuffer) => void) | null>(null)
 
   useEffect(() => {
     let closed = false
@@ -47,8 +56,10 @@ export function useSlideSync(token: string | null) {
       const query = token ? `?token=${encodeURIComponent(token)}` : ''
       const ws = new WebSocket(`${proto}://${location.host}/ws${query}`)
       wsRef.current = ws
+      ws.binaryType = 'arraybuffer'
       ws.onopen = () => setConnected(true)
       ws.onmessage = (e) => {
+        if (e.data instanceof ArrayBuffer) return onScreenChunk.current?.(e.data)
         const msg: Message = JSON.parse(e.data)
         if (msg.type === 'laser') setLaser(msg.at ? { page: msg.page, at: msg.at } : null)
         else if (msg.type === 'state') {
@@ -87,5 +98,16 @@ export function useSlideSync(token: string | null) {
     laser: (page: number, at: [number, number] | null) => send({ type: 'laser', page, at }),
   }
 
-  return { state, connected, goto, ink, laser }
+  const raw = (data: string | ArrayBuffer) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(data)
+  }
+  const screen = {
+    start: (codec: string) => raw(JSON.stringify({ type: 'screenStart', codec })),
+    stop: () => raw(JSON.stringify({ type: 'screenStop' })),
+    send: (chunk: ArrayBuffer) => raw(chunk),
+    // Bytes queued but not yet sent; the encoder drops frames when the upload falls behind.
+    backlog: () => wsRef.current?.bufferedAmount ?? 0,
+  }
+
+  return { state, connected, goto, ink, laser, screen, onScreenChunk }
 }

@@ -1,5 +1,6 @@
 // Realtime slide server: one shared session, state in memory.
 // shortcut: single room, login sessions and slide state lost on restart — add rooms/persistence before real use.
+import type { ServerWebSocket } from 'bun'
 import { mkdir, unlink } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
 import { ACCOUNTS_FILE, DATA_DIR, loadAccounts, saveAccount } from './accounts'
@@ -33,8 +34,11 @@ const bearer = (req: Request) => req.headers.get('Authorization')?.replace(/^Bea
 const unauthorized = () => new Response('กรุณาเข้าสู่ระบบ', { status: 401 })
 
 type Role = 'instructor' | 'viewer'
-type State = { pdfUrl: string | null; pdfName: string | null; page: number; ink: Ink }
-const state: State = { pdfUrl: null, pdfName: null, page: 1, ink: {} }
+// screen: set while the instructor shares their screen; viewers then show the relayed video instead of the slide.
+type State = { pdfUrl: string | null; pdfName: string | null; page: number; ink: Ink; screen: { codec: string } | null }
+const state: State = { pdfUrl: null, pdfName: null, page: 1, ink: {}, screen: null }
+let sharer: ServerWebSocket<{ role: Role }> | null = null
+const MAX_CHUNK_BYTES = 2 * 1024 * 1024
 // Every socket message is { type, ... }: 'state' carries the whole state, the others are ink edits.
 const broadcast = (msg: object): void => { server.publish('room', JSON.stringify(msg)) }
 const publishState = () => broadcast({ type: 'state', ...state })
@@ -113,14 +117,33 @@ const server = Bun.serve<{ role: Role }>({
     return serveFrontend(url.pathname)
   },
   websocket: {
+    maxPayloadLength: MAX_CHUNK_BYTES,
+    // A viewer this far behind gets video chunks dropped (it recovers at the next keyframe) instead of lagging further.
+    backpressureLimit: 1024 * 1024,
     open(ws) {
       ws.subscribe('room')
       ws.send(JSON.stringify({ type: 'state', ...state }))
     },
     message(ws, raw) {
       if (ws.data.role !== 'instructor') return
-      let msg: { type?: unknown; page?: unknown; stroke?: unknown; ids?: unknown }
-      try { msg = JSON.parse(String(raw)) } catch { return }
+      // Binary frames are encoded screen video: relay as-is to everyone else, only from the current sharer.
+      if (typeof raw !== 'string') {
+        if (ws === sharer && raw.byteLength > 9) ws.publish('room', raw)
+        return
+      }
+      let msg: { type?: unknown; page?: unknown; stroke?: unknown; ids?: unknown; codec?: unknown }
+      try { msg = JSON.parse(raw) } catch { return }
+      if (msg?.type === 'screenStart') {
+        if (typeof msg.codec !== 'string' || !/^[a-z0-9.]{1,64}$/i.test(msg.codec)) return
+        sharer = ws
+        state.screen = { codec: msg.codec }
+        publishState()
+        return
+      }
+      if (msg?.type === 'screenStop') {
+        if (ws === sharer) stopScreen()
+        return
+      }
       if (msg?.type === 'clear') {
         state.ink = {}
         broadcast({ type: 'clear' })
@@ -149,8 +172,17 @@ const server = Bun.serve<{ role: Role }>({
         broadcast({ type: 'clearPage', page: p })
       }
     },
+    close(ws) {
+      if (ws === sharer) stopScreen()
+    },
   },
 })
+
+function stopScreen() {
+  sharer = null
+  state.screen = null
+  publishState()
+}
 
 async function serveFrontend(pathname: string) {
   let path = ''

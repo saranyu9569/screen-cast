@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InkLayer, type InkTool } from './InkLayer'
 import { PdfSlide } from './PdfSlide'
+import { canShareScreen, startScreenShare } from './screenShare'
 import { type Ink, useSlideSync, type SlideState } from './useSlideSync'
 import { clamp, icons, useArrowKeys, useHash, usePinnedBar } from './hooks'
 import { FullscreenButton, Icon, LockButton, PersonIcon, SlideNav, Status } from './ui'
@@ -101,7 +102,7 @@ type AppProps = { token: string; username: string; onLogout: () => void }
 
 function InstructorApp({ token, username, onLogout }: AppProps) {
   const route = useHash().split('?')[0]
-  const { state, connected, goto, ink } = useSlideSync(token)
+  const { state, connected, goto, ink, screen } = useSlideSync(token)
 
   const logout = () => {
     fetch('/api/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
@@ -126,7 +127,7 @@ function InstructorApp({ token, username, onLogout }: AppProps) {
     return res?.ok ? null : 'ลบไฟล์ไม่สำเร็จ'
   }
 
-  if (route === ROUTES.present) return <Present state={state} connected={connected} goto={goto} ink={ink} />
+  if (route === ROUTES.present) return <Present state={state} connected={connected} goto={goto} ink={ink} screen={screen} />
 
   const page =
     route === ROUTES.teach ? <TeachPage state={state} upload={upload} remove={remove} /> :
@@ -266,6 +267,9 @@ function TeachPage({ state, upload, remove }: TeachProps) {
           onChange={(e) => { send(e.target.files?.[0]); e.target.value = '' }} />
       </label>
       {error && <p className="error" role="alert">{error}</p>}
+      {!state.pdfUrl && (
+        <a className="btn share-only" href={ROUTES.present}><Icon d={icons.cast} />หรือแชร์หน้าจอโดยไม่ใช้สไลด์</a>
+      )}
     </>
   )
 }
@@ -328,6 +332,7 @@ type PresentProps = {
   connected: boolean
   goto: (page: number) => void
   ink: ReturnType<typeof useSlideSync>['ink']
+  screen: ReturnType<typeof useSlideSync>['screen']
 }
 
 const INK_COLORS = [
@@ -347,13 +352,42 @@ const INK_TOOLS: { tool: InkTool | null; label: string; icon: string }[] = [
   { tool: 'eraser', label: 'ยางลบ', icon: icons.eraser },
 ]
 
-function Present({ state, connected, goto, ink }: PresentProps) {
+function Present({ state, connected, goto, ink, screen }: PresentProps) {
   const [numPages, setNumPages] = useState(0)
   const [pinned, togglePinned] = usePinnedBar()
   const [tool, setTool] = useState<InkTool | null>(null)
   const [color, setColor] = useState(INK_COLORS[0].value)
   const [sizePx, setSizePx] = useState(4)
   const exitRef = useRef<HTMLDialogElement>(null)
+  const [shareStream, setShareStream] = useState<MediaStream | null>(null)
+  const [shareError, setShareError] = useState('')
+  const stopShare = useRef<(() => void) | null>(null)
+
+  // Leaving the presenter view ends the share so viewers aren't left on a frozen screen.
+  useEffect(() => () => stopShare.current?.(), [])
+
+  const toggleShare = async () => {
+    if (stopShare.current) return stopShare.current()
+    setShareError('')
+    if (!canShareScreen()) return setShareError('การแชร์จอต้องใช้ Chrome หรือ Edge บนคอมพิวเตอร์')
+    try {
+      const share = await startScreenShare({
+        onStart: screen.start,
+        onChunk: screen.send,
+        backlog: screen.backlog,
+        onEnd: () => {
+          screen.stop()
+          stopShare.current = null
+          setShareStream(null)
+        },
+      })
+      stopShare.current = share.stop
+      setShareStream(share.stream)
+    } catch (e) {
+      // Closing the picker without choosing is not an error worth showing.
+      if ((e as Error).name !== 'NotAllowedError') setShareError('เริ่มแชร์จอไม่สำเร็จ')
+    }
+  }
 
   const go = (d: number) => goto(clamp(state.page + d, numPages))
   useArrowKeys(go)
@@ -366,7 +400,14 @@ function Present({ state, connected, goto, ink }: PresentProps) {
 
   return (
     <main className="layout">
-      {state.pdfUrl
+      {shareStream
+        ? (
+          <div className="slide-box screen-view">
+            <video autoPlay muted playsInline aria-label="ตัวอย่างหน้าจอที่กำลังแชร์"
+              ref={(v) => { if (v && v.srcObject !== shareStream) v.srcObject = shareStream }} />
+          </div>
+        )
+        : state.pdfUrl
         ? (
           <PdfSlide url={state.pdfUrl} page={state.page} onLoad={setNumPages}>
             <InkLayer strokes={strokes} tool={tool} color={color} sizePx={tool === 'pencil' ? Math.max(1, sizePx / 2) : sizePx}
@@ -374,9 +415,9 @@ function Present({ state, connected, goto, ink }: PresentProps) {
               onLaser={(at) => ink.laser(state.page, at)} />
           </PdfSlide>
         )
-        : <p className="empty">ยังไม่มีไฟล์ — <a href={ROUTES.teach}>เลือกไฟล์ PDF</a> ก่อนเริ่มการสอน</p>}
+        : <p className="empty">ยังไม่มีไฟล์ — <a href={ROUTES.teach}>เลือกไฟล์ PDF</a> หรือกด “แชร์จอ” ด้านล่าง</p>}
       {!pinned && <div className="reveal-zone" aria-hidden="true" />}
-      {state.pdfUrl && (
+      {state.pdfUrl && !shareStream && (
         <aside className="ink-panel" role="toolbar" aria-orientation="vertical" aria-label="เครื่องมือเขียน">
           {INK_TOOLS.map((t) => (
             <button key={t.label} className="icon-btn" aria-pressed={tool === t.tool} onClick={() => {
@@ -421,6 +462,10 @@ function Present({ state, connected, goto, ink }: PresentProps) {
             <Icon d={icons.home} />
           </button>
           <strong className="who"><PersonIcon />ผู้สอน</strong>
+          <button className={shareStream ? 'primary' : undefined} onClick={toggleShare} aria-pressed={!!shareStream}>
+            <Icon d={icons.cast} />{shareStream ? 'หยุดแชร์จอ' : 'แชร์จอ'}
+          </button>
+          {shareError && <span className="error" role="alert">{shareError}</span>}
         </div>
         <SlideNav page={state.page} numPages={state.pdfUrl ? numPages : 0} go={go} />
         <div className="side end">

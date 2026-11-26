@@ -282,3 +282,10 @@ a.who:hover { background: var(--orange-soft); }
   box-shadow: 0 0 6px 3px rgb(255 31 31 / 0.55);
   pointer-events: none;
 }
+
+/* ---------- Shared screen ---------- */
+.screen-view { position: relative; background: #0b1020; }
+.screen-view canvas, .screen-view video { max-width: 100%; max-height: 100%; object-fit: contain; }
+.screen-waiting { position: absolute; margin: 0; color: #c5cde0; }
+.nav[hidden] { display: none; }
+.share-only { justify-self: start; }
