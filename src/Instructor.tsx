@@ -164,8 +164,7 @@ function TopNav({ route, username, onLogout }: { route: string; username: string
   return (
     <header className="topnav">
       <a href={ROUTES.home} className="brand" aria-current={route === ROUTES.home ? 'page' : undefined}>
-        <img src="/favicon.png" alt="" width="28" height="28" />
-        Screen Cast
+        <img src="/logo.png" alt="VIEW — Visual Interface for Educational Workspace" width="137" height="48" />
       </a>
       <nav aria-label="เมนูผู้สอน">
         {links.map((l) => (

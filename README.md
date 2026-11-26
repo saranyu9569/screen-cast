@@ -1,4 +1,4 @@
-# Screen Cast
+# VIEW — Visual Interface for Educational Workspace
 
 Share PDF slides live: the instructor presents and draws, viewers follow along in their browser.
 

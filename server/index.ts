@@ -239,4 +239,4 @@ async function serveFrontend(pathname: string) {
   return (await index.exists()) ? new Response(index) : new Response('Not found', { status: 404 })
 }
 
-console.log(`screen-cast server on http://localhost:${server.port}`)
+console.log(`VIEW server on http://localhost:${server.port}`)
