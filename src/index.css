@@ -1,16 +1,17 @@
 :root {
-  /* White-first theme in the VIEW logo's colours: navy text, gold for trim and main actions, teal for highlights. */
-  --navy: #022549;
-  --gold: #f2b01e;
-  --gold-soft: #fff6dc;
+  /* White-first: navy for text and main actions, gold only as trim, teal for small highlights. */
+  --navy: #173458;
+  --navy-hover: #234470;
+  --gold: #d1a73c;
+  --gold-soft: #fbf4e4;
   --teal: #00939a;
   --teal-soft: #e2f4f4;
   --text: #1c2b45;
-  --muted: #5b6680;
+  --muted: #58636e;
   --bg: #fff;
-  --surface: #f6f8fb;
+  --surface: #f4f6f9;
   --border: #e1e6ef;
-  --control-border: #cfd6e3;
+  --control-border: #b8c0c9;
   --stage: #eef1f6;
   --danger: #c62828;
 
