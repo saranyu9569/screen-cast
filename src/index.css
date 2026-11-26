@@ -1,36 +1,23 @@
 :root {
+  /* White-first theme; navy and orange are trim only. */
   --navy: #14213d;
+  --navy-hover: #22325a;
   --orange: #f77f00;
-  --text: #3a4560;
-  --text-h: #14213d;
-  --muted: #6b7591;
-  --bg: #f4f6fa;
-  --surface: #fff;
-  --border: #dde2ec;
-  --accent: var(--orange);
-  --on-accent: #14213d;
-  --bar: var(--navy);
-  --on-bar: #fff;
-  --stage: #0b1426;
+  --orange-soft: #fff3e6;
+  --text: #1f2a44;
+  --muted: #5b6680;
+  --bg: #fff;
+  --surface: #f6f8fb;
+  --border: #e1e6ef;
+  --control-border: #cfd6e3;
+  --stage: #eef1f6;
+  --danger: #c62828;
 
   font: 15px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #c5cde0;
-    --text-h: #f3f5fa;
-    --muted: #8e98b3;
-    --bg: #0b1426;
-    --surface: #1a2a4d;
-    --border: #2b3d66;
-    --bar: #0f1b33;
-    --stage: #060c18;
-  }
 }
 
 * { box-sizing: border-box; }

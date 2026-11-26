@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
-type Props = { url: string; page: number; onLoad: (numPages: number) => void }
+// children are drawn over the slide at exactly its size (used for ink).
+type Props = { url: string; page: number; onLoad: (numPages: number) => void; children?: ReactNode }
 
-export function PdfSlide({ url, page, onLoad }: Props) {
+export function PdfSlide({ url, page, onLoad, children }: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
@@ -57,7 +58,10 @@ export function PdfSlide({ url, page, onLoad }: Props) {
 
   return (
     <div ref={boxRef} className="slide-box">
-      <canvas ref={canvasRef} aria-label={`สไลด์ ${page}`} />
+      <div className="slide-wrap">
+        <canvas ref={canvasRef} aria-label={`สไลด์ ${page}`} />
+        {children}
+      </div>
     </div>
   )
 }
