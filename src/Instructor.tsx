@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InkLayer, type InkTool } from './InkLayer'
 import { PdfSlide } from './PdfSlide'
-import { canShareScreen, startScreenShare } from './screenShare'
+import { canShareScreen, nativeApp, startScreenShare } from './screenShare'
 import { type Ink, useSlideSync, type SlideState } from './useSlideSync'
 import { clamp, icons, useArrowKeys, useHash, usePinnedBar } from './hooks'
 import { FullscreenButton, Icon, LockButton, PersonIcon, SlideNav, Status } from './ui'
@@ -141,7 +141,7 @@ function InstructorApp({ token, username, onLogout }: AppProps) {
     },
   }
 
-  if (route === ROUTES.present) return <Present state={state} connected={connected} goto={goto} ink={ink} screen={screen} />
+  if (route === ROUTES.present) return <Present state={state} connected={connected} goto={goto} ink={ink} screen={screen} token={token} />
 
   const page =
     route === ROUTES.teach ? <TeachPage state={state} upload={upload} remove={remove} /> :
@@ -381,6 +381,15 @@ function SettingsPage({ username, onLogout }: { username: string; onLogout: () =
           <input type="checkbox" role="switch" checked={pinned} onChange={togglePinned} />
         </label>
       </section>
+      {nativeApp() && (
+        <section className="card">
+          <h2>แอปแท็บเล็ต</h2>
+          <div className="row">
+            <span className="muted">เซิร์ฟเวอร์ที่แอปเชื่อมต่อ: {location.origin}</span>
+            <button className="btn" onClick={() => nativeApp()!.changeServer()}>เปลี่ยนเซิร์ฟเวอร์</button>
+          </div>
+        </section>
+      )}
     </>
   )
 }
@@ -391,6 +400,7 @@ type PresentProps = {
   goto: (page: number) => void
   ink: ReturnType<typeof useSlideSync>['ink']
   screen: ReturnType<typeof useSlideSync>['screen']
+  token: string
 }
 
 const INK_COLORS = [
@@ -410,7 +420,7 @@ const INK_TOOLS: { tool: InkTool | null; label: string; icon: string }[] = [
   { tool: 'eraser', label: 'ยางลบ', icon: icons.eraser },
 ]
 
-function Present({ state, connected, goto, ink, screen }: PresentProps) {
+function Present({ state, connected, goto, ink, screen, token }: PresentProps) {
   const [numPages, setNumPages] = useState(0)
   const [pinned, togglePinned] = usePinnedBar()
   const [tool, setTool] = useState<InkTool | null>(null)
@@ -420,14 +430,32 @@ function Present({ state, connected, goto, ink, screen }: PresentProps) {
   const [shareStream, setShareStream] = useState<MediaStream | null>(null)
   const [shareError, setShareError] = useState('')
   const stopShare = useRef<(() => void) | null>(null)
+  const [nativeSharing, setNativeSharing] = useState(() => !!nativeApp()?.isSharing())
+  const sharing = !!shareStream || nativeSharing
+
+  // The Android app reports when its native share stops (stop button, notification, system, or a refused prompt).
+  useEffect(() => {
+    const ended = () => setNativeSharing(false)
+    addEventListener('viewnative-share-ended', ended)
+    return () => removeEventListener('viewnative-share-ended', ended)
+  }, [])
 
   // Leaving the presenter view ends the share so viewers aren't left on a frozen screen.
-  useEffect(() => () => stopShare.current?.(), [])
+  useEffect(() => () => {
+    stopShare.current?.()
+    if (nativeApp()?.isSharing()) nativeApp()!.stopScreenShare()
+  }, [])
 
   const toggleShare = async () => {
+    const app = nativeApp()
+    if (app) {
+      if (nativeSharing) app.stopScreenShare()
+      else app.startScreenShare(token)
+      return setNativeSharing(!nativeSharing)
+    }
     if (stopShare.current) return stopShare.current()
     setShareError('')
-    if (!canShareScreen()) return setShareError('การแชร์จอต้องใช้ Chrome หรือ Edge บนคอมพิวเตอร์')
+    if (!canShareScreen()) return setShareError('การแชร์จอต้องใช้ Chrome หรือ Edge บนคอมพิวเตอร์ หรือแอป VIEW บนแท็บเล็ต')
     try {
       const share = await startScreenShare({
         onStart: screen.start,
@@ -458,7 +486,9 @@ function Present({ state, connected, goto, ink, screen }: PresentProps) {
 
   return (
     <main className="layout">
-      {shareStream
+      {nativeSharing
+        ? <p className="empty">กำลังแชร์หน้าจอแท็บเล็ต — สลับไปเปิดแอปหรือเว็บอื่นได้เลย ผู้ชมจะเห็นตาม</p>
+        : shareStream
         ? (
           <div className="slide-box screen-view">
             <video autoPlay muted playsInline aria-label="ตัวอย่างหน้าจอที่กำลังแชร์"
@@ -476,11 +506,11 @@ function Present({ state, connected, goto, ink, screen }: PresentProps) {
         : <p className="empty">ยังไม่มีไฟล์ — <a href={ROUTES.teach}>เลือกไฟล์ PDF</a> หรือกด “แชร์จอ” ด้านล่าง</p>}
       {!pinned && <div className="reveal-zone" aria-hidden="true" />}
       <aside className="ink-panel" role="toolbar" aria-orientation="vertical" aria-label="เครื่องมือ">
-        <button className={shareStream ? 'icon-btn sharing' : 'icon-btn'} onClick={toggleShare} aria-pressed={!!shareStream}
-          aria-label={shareStream ? 'หยุดแชร์จอ' : 'แชร์จอ'} title={shareStream ? 'หยุดแชร์จอ' : 'แชร์จอ'}>
+        <button className={sharing ? 'icon-btn sharing' : 'icon-btn'} onClick={toggleShare} aria-pressed={sharing}
+          aria-label={sharing ? 'หยุดแชร์จอ' : 'แชร์จอ'} title={sharing ? 'หยุดแชร์จอ' : 'แชร์จอ'}>
           <Icon d={icons.cast} />
         </button>
-        {state.pdfUrl && !shareStream && (
+        {state.pdfUrl && !sharing && (
           <>
             <span className="divider" aria-hidden="true" />
             {INK_TOOLS.map((t) => (
@@ -527,8 +557,8 @@ function Present({ state, connected, goto, ink, screen }: PresentProps) {
             <Icon d={icons.home} />
           </button>
           <strong className="who"><PersonIcon />ผู้สอน</strong>
-          <button className={shareStream ? 'primary' : undefined} onClick={toggleShare} aria-pressed={!!shareStream}>
-            <Icon d={icons.cast} />{shareStream ? 'หยุดแชร์จอ' : 'แชร์จอ'}
+          <button className={sharing ? 'primary' : undefined} onClick={toggleShare} aria-pressed={sharing}>
+            <Icon d={icons.cast} />{sharing ? 'หยุดแชร์จอ' : 'แชร์จอ'}
           </button>
           {shareError && <span className="error" role="alert">{shareError}</span>}
         </div>

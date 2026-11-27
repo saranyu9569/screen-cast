@@ -32,7 +32,19 @@ export function unpackChunk(buf: ArrayBuffer): EncodedVideoChunk | null {
 // shortcut: capture needs MediaStreamTrackProcessor (Chrome/Edge) so it keeps running while the instructor
 // is on another tab or app; add a Worker-based reader if Safari/Firefox instructors must share too.
 export const canShareScreen = () =>
-  typeof VideoEncoder !== 'undefined' && 'MediaStreamTrackProcessor' in window && !!navigator.mediaDevices?.getDisplayMedia
+  !!nativeApp() ||
+  (typeof VideoEncoder !== 'undefined' && 'MediaStreamTrackProcessor' in window && !!navigator.mediaDevices?.getDisplayMedia)
+
+// Inside the VIEW Android app (android/), the tablet can't capture its screen from the web page, so the app does it
+// natively and streams the same chunk format straight to the server. It tells the page when sharing ends with a
+// 'viewnative-share-ended' window event.
+type NativeApp = {
+  startScreenShare(token: string): void
+  stopScreenShare(): void
+  isSharing(): boolean
+  changeServer(): void
+}
+export const nativeApp = () => (window as unknown as { ViewNative?: NativeApp }).ViewNative
 
 export const canViewScreen = () => typeof VideoDecoder !== 'undefined'
 
