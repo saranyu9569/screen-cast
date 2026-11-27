@@ -230,13 +230,18 @@ function stopScreen() {
 async function serveFrontend(pathname: string) {
   let path = ''
   try { path = normalize(join(DIST_DIR, decodeURIComponent(pathname))) } catch { /* bad %-encoding: fall back to the app shell */ }
-  if (path.startsWith(DIST_DIR)) {
+  if (path.startsWith(DIST_DIR) && path !== DIST_DIR && !path.endsWith('/index.html')) {
     const file = Bun.file(path)
-    if (path !== DIST_DIR && (await file.exists())) return new Response(file)
+    // Vite puts a content hash in every /assets/ file name, so those can be cached forever.
+    const cache = path.startsWith(join(DIST_DIR, 'assets')) ? 'public, max-age=31536000, immutable' : 'no-cache'
+    if (await file.exists()) return new Response(file, { headers: { 'Cache-Control': cache } })
   }
-  // The app routes with #hash, so any other path just gets the app shell.
+  // The app routes with #hash, so any other path just gets the app shell. It must never be cached, or browsers
+  // (and the Android app's WebView) keep running an old build after a deploy.
   const index = Bun.file(join(DIST_DIR, 'index.html'))
-  return (await index.exists()) ? new Response(index) : new Response('Not found', { status: 404 })
+  return (await index.exists())
+    ? new Response(index, { headers: { 'Cache-Control': 'no-cache' } })
+    : new Response('Not found', { status: 404 })
 }
 
 console.log(`VIEW server on http://localhost:${server.port}`)
